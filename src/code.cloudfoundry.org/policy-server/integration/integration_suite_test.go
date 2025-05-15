@@ -74,11 +74,6 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	fmt.Fprint(GinkgoWriter, "done")
 	Expect(err).NotTo(HaveOccurred())
 
-	fmt.Fprint(GinkgoWriter, "building migrate-db binary...")
-	paths.MigrateDb, err = gexec.Build("code.cloudfoundry.org/policy-server/cmd/migrate-db", "-race", "-buildvcs=false")
-	fmt.Fprint(GinkgoWriter, "done")
-	Expect(err).NotTo(HaveOccurred())
-
 	data, err := json.Marshal(paths)
 	Expect(err).NotTo(HaveOccurred())
 	return data
@@ -128,8 +123,8 @@ func startPolicyServers(configs []config.Config) []*gexec.Session {
 func startPolicyAndInternalServers(configs []config.Config, internalConfigs []config.InternalConfig) []*gexec.Session {
 	testhelpers.CreateDatabase(configs[0].Database)
 
-	session := helpers.RunMigrationsPreStartBinary(migrateDbPath, configs[0])
-	Eventually(session.Wait(TimeoutShort)).Should(gexec.Exit(0))
+	// session := helpers.RunMigrationsPreStartBinary(migrateDbPath, configs[0])
+	// Eventually(session.Wait(TimeoutShort)).Should(gexec.Exit(0))
 
 	var sessions []*gexec.Session
 	for _, conf := range configs {
