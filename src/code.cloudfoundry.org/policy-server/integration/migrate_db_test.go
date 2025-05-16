@@ -45,7 +45,7 @@ var _ = Describe("Migrate DB Binary", func() {
 		})
 
 		It("runs the migrations and seeds the groups table", func() {
-			session := helpers.RunMigrationsPreStartBinary(migrateDbPath, conf)
+			session := helpers.RunMigrationsPreStartBinary(policyServerPath, conf)
 			Eventually(session.Wait(TimeoutShort)).Should(gexec.Exit(0))
 
 			conn := createDbConn(dbConf)
@@ -56,9 +56,9 @@ var _ = Describe("Migrate DB Binary", func() {
 
 		Context("when the migrations have already run", func() {
 			It("runs successfully", func() {
-				session := helpers.RunMigrationsPreStartBinary(migrateDbPath, conf)
+				session := helpers.RunMigrationsPreStartBinary(policyServerPath, conf)
 				Eventually(session.Wait(TimeoutShort)).Should(gexec.Exit(0))
-				session = helpers.RunMigrationsPreStartBinary(migrateDbPath, conf)
+				session = helpers.RunMigrationsPreStartBinary(policyServerPath, conf)
 				Eventually(session.Wait(TimeoutShort)).Should(gexec.Exit(0))
 			})
 		})
@@ -71,7 +71,7 @@ var _ = Describe("Migrate DB Binary", func() {
 			})
 
 			It("eventually succeeds", func() {
-				session := helpers.RunMigrationsPreStartBinary(migrateDbPath, conf)
+				session := helpers.RunMigrationsPreStartBinary(policyServerPath, conf)
 				testhelpers.CreateDatabase(dbConf)
 				Eventually(session.Wait(TimeoutShort)).Should(gexec.Exit(0))
 				conn := createDbConn(dbConf)
@@ -84,7 +84,7 @@ var _ = Describe("Migrate DB Binary", func() {
 		Context("when it never becomes available", func() {
 			It("exits non-zero", func() {
 				conf.DatabaseMigrationTimeout = 1
-				session := helpers.RunMigrationsPreStartBinary(migrateDbPath, conf)
+				session := helpers.RunMigrationsPreStartBinary(policyServerPath, conf)
 				Eventually(session.Wait(TimeoutShort)).Should(gexec.Exit(1))
 			})
 		})
