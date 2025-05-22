@@ -94,7 +94,7 @@ func writeConfig(index int, outDir string) error {
 		"name": "some-net-%d",
 		"type": "plugin-%d"
 	}`, index, index)
-	outpath := filepath.Join(outDir, fmt.Sprintf("%d-plugin-%d.conf", 10*index, index))
+	outpath := filepath.Join(outDir, fmt.Sprintf("%d-plugin-%d.conftest", 10*index, index))
 	return os.WriteFile(outpath, []byte(config), 0600)
 }
 
