@@ -29,7 +29,7 @@ func (l *CNILoader) GetNetworkConfig() (*libcni.NetworkConfigList, error) {
 		confListFilePaths []string
 	)
 
-	err := filepath.Walk(l.ConfigDir, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk("test", func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -78,7 +78,7 @@ func (l *CNILoader) GetNetworkConfig() (*libcni.NetworkConfigList, error) {
 
 		toReturn = confList
 	} else {
-		return nil, fmt.Errorf("unable to upconvert from conf to conf list %s", l.ConfigDir)
+		return nil, fmt.Errorf("error loading config: %s", l.ConfigDir)
 
 	}
 
