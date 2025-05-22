@@ -78,7 +78,7 @@ func (l *CNILoader) GetNetworkConfig() (*libcni.NetworkConfigList, error) {
 
 		toReturn = confList
 	} else {
-		return nil, fmt.Errorf("unable to upconvert from conf to conf list %s: %s", path, err)
+		return nil, fmt.Errorf("unable to upconvert from conf to conf list %s", l.ConfigDir)
 
 	}
 
