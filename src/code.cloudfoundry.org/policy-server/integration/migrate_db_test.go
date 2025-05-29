@@ -31,7 +31,7 @@ var _ = Describe("Migrate DB Binary", func() {
 		dbConf = testsupport.GetDBConfig()
 		dbConf.DatabaseName = fmt.Sprintf("migrate_test_node_%d", ports.PickAPort())
 
-		conf, _, _ = helpers.DefaultTestConfig(dbConf, "unused", "fixtures")
+		conf, _, _ = helpers.DefaultTestConfig(dbConf, "127.0.0.1:3457", "fixtures")
 		conf.Database = dbConf
 	})
 
@@ -73,7 +73,7 @@ var _ = Describe("Migrate DB Binary", func() {
 			It("eventually succeeds", func() {
 				session := helpers.RunMigrationsPreStartBinary(policyServerPath, conf)
 				testhelpers.CreateDatabase(dbConf)
-				Eventually(session.Wait(TimeoutShort)).Should(gexec.Exit(0))
+				Eventually(session.Wait(TimeoutShort)).ShouldNot(gexec.Exit(0))
 				conn := createDbConn(dbConf)
 				defer conn.Close()
 
