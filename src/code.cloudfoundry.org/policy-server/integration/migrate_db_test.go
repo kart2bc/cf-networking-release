@@ -3,6 +3,8 @@ package integration_test
 import (
 	"fmt"
 	"math"
+	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -46,7 +48,16 @@ var _ = Describe("Migrate DB Binary", func() {
 
 		It("runs the migrations and seeds the groups table", func() {
 			session := helpers.RunMigrationsPreStartBinary(policyServerPath, conf)
-			Eventually(session.Wait(TimeoutShort)).Should(gexec.Exit(0))
+			Eventually(func() error {
+				resp, err := http.Get("http://localhost:" + strconv.Itoa(conf.ListenPort))
+				if err != nil {
+					return err
+				}
+				defer resp.Body.Close()
+				return nil
+			}, TimeoutShort).Should(Succeed())
+			session.Kill().Wait(TimeoutShort)
+			Eventually(session, TimeoutShort).Should(gexec.Exit(0))
 
 			conn := createDbConn(dbConf)
 			defer conn.Close()
