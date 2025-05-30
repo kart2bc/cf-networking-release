@@ -88,7 +88,16 @@ var _ = Describe("Migrate DB Binary", func() {
 			It("exits non-zero", func() {
 				conf.DatabaseMigrationTimeout = 1
 				session := helpers.RunMigrationsPreStartBinary(policyServerPath, conf)
-				Eventually(session.Wait(TimeoutShort)).Should(gexec.Exit(3))
+				Eventually(session.Wait(TimeoutShort)).Should(gexec.Exit(1))
+			})
+		})
+		Context("when migration fails", func() {
+			It("exits non-zero", func() {
+				var timeoutSec float32 = 0.01
+				conf.DatabaseMigrationTimeout = int(timeoutSec)
+				testhelpers.CreateDatabase(dbConf)
+				session := helpers.RunMigrationsPreStartBinary(policyServerPath, conf)
+				Eventually(session.Wait(TimeoutShort)).Should(gexec.Exit(1))
 			})
 		})
 	})
