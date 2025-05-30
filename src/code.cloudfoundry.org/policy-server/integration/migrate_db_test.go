@@ -2,6 +2,7 @@ package integration_test
 
 import (
 	"fmt"
+	"io"
 	"math"
 	"net/http"
 	"strconv"
@@ -48,17 +49,8 @@ var _ = Describe("Migrate DB Binary", func() {
 
 		It("runs the migrations and seeds the groups table", func() {
 			session := helpers.RunMigrationsPreStartBinary(policyServerPath, conf)
-			Eventually(func() error {
-				resp, err := http.Get("http://localhost:" + strconv.Itoa(conf.ListenPort))
-				if err != nil {
-					return err
-				}
-				defer resp.Body.Close()
-				return nil
-			}, TimeoutShort).Should(Succeed())
+			checkServerHealth(conf)
 			session.Kill().Wait(TimeoutShort)
-			Eventually(session, TimeoutShort).Should(gexec.Exit(0))
-
 			conn := createDbConn(dbConf)
 			defer conn.Close()
 
@@ -68,9 +60,8 @@ var _ = Describe("Migrate DB Binary", func() {
 		Context("when the migrations have already run", func() {
 			It("runs successfully", func() {
 				session := helpers.RunMigrationsPreStartBinary(policyServerPath, conf)
-				Eventually(session.Wait(TimeoutShort)).Should(gexec.Exit(0))
-				session = helpers.RunMigrationsPreStartBinary(policyServerPath, conf)
-				Eventually(session.Wait(TimeoutShort)).Should(gexec.Exit(0))
+				checkServerHealth(conf)
+				session.Kill().Wait(TimeoutShort)
 			})
 		})
 	})
@@ -84,7 +75,8 @@ var _ = Describe("Migrate DB Binary", func() {
 			It("eventually succeeds", func() {
 				session := helpers.RunMigrationsPreStartBinary(policyServerPath, conf)
 				testhelpers.CreateDatabase(dbConf)
-				Eventually(session.Wait(TimeoutShort)).ShouldNot(gexec.Exit(0))
+				checkServerHealth(conf)
+				session.Kill().Wait(TimeoutShort)
 				conn := createDbConn(dbConf)
 				defer conn.Close()
 
@@ -96,7 +88,7 @@ var _ = Describe("Migrate DB Binary", func() {
 			It("exits non-zero", func() {
 				conf.DatabaseMigrationTimeout = 1
 				session := helpers.RunMigrationsPreStartBinary(policyServerPath, conf)
-				Eventually(session.Wait(TimeoutShort)).Should(gexec.Exit(1))
+				Eventually(session.Wait(TimeoutShort)).Should(gexec.Exit(3))
 			})
 		})
 	})
@@ -131,6 +123,21 @@ func assertMigrationsSucceeded(conn *db.ConnWrapper, conf config.Config) {
 	var groupCount int
 	conn.QueryRow(`SELECT COUNT(*) FROM "groups"`).Scan(&groupCount)
 	Expect(groupCount).To(Equal(int(math.Exp2(float64(conf.TagLength*8))) - 1))
+}
+
+func checkServerHealth(conf config.Config) {
+	Eventually(func() error {
+		resp, err := http.Get("http://localhost:" + strconv.Itoa(conf.ListenPort))
+		if err != nil {
+			return err
+		}
+		Expect(resp.StatusCode).To(Equal(http.StatusOK))
+		responseString, err := io.ReadAll(resp.Body)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(responseString).To(ContainSubstring("Network policy server, up for"))
+		defer resp.Body.Close()
+		return nil
+	}, TimeoutShort).Should(Succeed())
 }
 
 func createDbConn(dbConf db.Config) *db.ConnWrapper {
