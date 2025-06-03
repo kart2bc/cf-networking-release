@@ -1,8 +1,9 @@
 name: unit-integration-tests
-true:
+
+on:
   pull_request_target:
-    types:
-    - labeled
+    branches:
+    - develop
 env:
   MAPPING: |
     build_nats_server=src/code.cloudfoundry.org/vendor/github.com/nats-io/nats-server/v2
