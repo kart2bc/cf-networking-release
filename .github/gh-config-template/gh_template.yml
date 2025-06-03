@@ -28,7 +28,7 @@ env:
     verify_gofmt repo/$DIR
     verify_govet repo/$DIR
     verify_staticcheck repo/$DIR
-  FUNCTIONS: ci/routing-release/helpers/configure-binaries.bash
+  FUNCTIONS: ci/cf-networking-release/helpers/configure-binaries.bash
 
 jobs:
   repo-clone:
@@ -78,16 +78,19 @@ jobs:
   test-on-mysql-5-7:
     runs-on: ubuntu-latest
     needs: repo-clone
-    container:
-      image: us-central1-docker.pkg.dev/cf-diego-pivotal/tas-runtime-dockerhub-mirror/cloudfoundry/tas-runtime-mysql-5.7
-      credentials:
-        username: _json_key
-        password: ${{ secrets.GCP_SERVICE_ACCOUNT_TAS_RUNTIME_BUILD_IMAGE_READER }}
     steps:
     - name: Download artifact
       uses: actions/download-artifact@v4
       with:
           name: repo
+    - name: Authenticate with GCP
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: '${{ secrets.GCP_SERVICE_ACCOUNT_TAS_RUNTIME_BUILD_IMAGE_READER }}'
+    - name: Configure Docker to use gcloud
+      run: |
+          gcloud auth configure-docker us-central1-docker.pkg.dev
+          docker pull us-central1-docker.pkg.dev/cf-diego-pivotal/tas-runtime-dockerhub-mirror/cloudfoundry/tas-runtime-mysql-5.7
     - run: |
           tar -xzvf repo-artifact.tar.gz
           tar -xzvf ci-artifact.tar.gz 
