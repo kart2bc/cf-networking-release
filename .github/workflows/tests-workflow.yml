@@ -9,7 +9,6 @@ on:
 env:
   MAPPING: |
     build_nats_server=src/code.cloudfoundry.org/vendor/github.com/nats-io/nats-server/v2
-    build_routing_api_cli=src/code.cloudfoundry.org/routing-api-cli
   FLAGS: |
     --keep-going
     --trace
@@ -27,7 +26,8 @@ env:
     verify_gofmt repo/$DIR
     verify_govet repo/$DIR
     verify_staticcheck repo/$DIR
-  FUNCTIONS: ci/routing-release/helpers/configure-binaries.bash
+  FUNCTIONS: ""
+  DB: ""
 jobs:
   repo-clone:
     runs-on: ubuntu-latest
@@ -58,11 +58,11 @@ jobs:
   template-tests:
     runs-on: ubuntu-latest
     needs: repo-clone
-    # container:
-    #   image: us-central1-docker.pkg.dev/cf-diego-pivotal/tas-runtime-dockerhub-mirror/cloudfoundry/tas-runtime-build
-    #   credentials:
-    #     username: _json_key
-    #     password: ${{ secrets.GCP_SERVICE_ACCOUNT_TAS_RUNTIME_BUILD_IMAGE_READER }}
+    container:
+      image: us-central1-docker.pkg.dev/cf-diego-pivotal/tas-runtime-dockerhub-mirror/cloudfoundry/tas-runtime-build
+      credentials:
+        username: _json_key
+        password: ${{ secrets.GCP_SERVICE_ACCOUNT_TAS_RUNTIME_BUILD_IMAGE_READER }}
     steps:
     - name: Download artifact
       uses: actions/download-artifact@v4
@@ -73,20 +73,12 @@ jobs:
         tar -xzvf ci-artifact.tar.gz
     - name: template-tests
       run: |
-        docker pull cloudfoundry/tas-runtime-build 
-        docker run --rm --privileged \
-        -v "${{ github.workspace }}:/workspace" \
-        -w /workspace \
-        cloudfoundry/tas-runtime-build \
-        bash ./ci/shared/tasks/run-tests-templates/task.bash
+        "${GITHUB_WORKSPACE}"/ci/shared/tasks/run-tests-templates/task.bash
   test-on-mysql-5-7:
     runs-on: ubuntu-latest
+    env:
+      BUILD_IMAGE: us-central1-docker.pkg.dev/cf-diego-pivotal/tas-runtime-dockerhub-mirror/cloudfoundry/tas-runtime-mysql-5.7
     needs: repo-clone
-  #   # container:
-  #   #   image: us-central1-docker.pkg.dev/cf-diego-pivotal/tas-runtime-dockerhub-mirror/cloudfoundry/tas-runtime-mysql-5.7
-  #   #   credentials:
-  #   #     username: _json_key
-  #   #     password: ${{ secrets.GCP_SERVICE_ACCOUNT_TAS_RUNTIME_BUILD_IMAGE_READER }}
     steps:
     - name: Download artifact
       uses: actions/download-artifact@v4
@@ -95,33 +87,34 @@ jobs:
     - name: Authenticate with GCP
       uses: google-github-actions/auth@v2
       with:
-        credentials_json: '${{ secrets.GCP_SERVICE_ACCOUNT_TAS_RUNTIME_BUILD_IMAGE_READER }}'
+        credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_TAS_RUNTIME_BUILD_IMAGE_READER }}
     - name: Configure Docker to use gcloud
       run: |
-          gcloud auth configure-docker us-central1-docker.pkg.dev
-          docker pull us-central1-docker.pkg.dev/cf-diego-pivotal/tas-runtime-dockerhub-mirror/cloudfoundry/tas-runtime-mysql-5.7
-
+        gcloud auth configure-docker us-central1-docker.pkg.dev
+        docker pull "$BUILD_IMAGE"
     - run: "tar -xzvf repo-artifact.tar.gz\ntar -xzvf ci-artifact.tar.gz \n"
     - name: policy-server-mysql
       env:
         DIR: src/code.cloudfoundry.org/policy-server
         DB: mysql
       run: |
-        ls -la
-        ./repo/.github/helpers/test.bash ${{ github.workspace }}
+        ./repo/.github/helpers/test.bash ${{ github.workspace }} "$BUILD_IMAGE"
   test-repos-withoutdb:
     runs-on: ubuntu-latest
     needs: repo-clone
-    # container:
-    #   image: us-central1-docker.pkg.dev/cf-diego-pivotal/tas-runtime-dockerhub-mirror/cloudfoundry/tas-runtime-build
-    #   credentials:
-    #     username: _json_key
-    #     password: ${{ secrets.GCP_SERVICE_ACCOUNT_TAS_RUNTIME_BUILD_IMAGE_READER }}
+    env:
+      BUILD_IMAGE: us-central1-docker.pkg.dev/cf-diego-pivotal/tas-runtime-dockerhub-mirror/cloudfoundry/tas-runtime-build
     steps:
     - name: Download artifact
       uses: actions/download-artifact@v4
       with:
         name: repo
+    - name: Authenticate with GCP
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_TAS_RUNTIME_BUILD_IMAGE_READER }}
+    - name: Configure Docker to use gcloud
+      run: "gcloud auth configure-docker us-central1-docker.pkg.dev\ndocker pull \"$BUILD_IMAGE\" \n"
     - run: |
         tar -xzvf repo-artifact.tar.gz
         tar -xzvf ci-artifact.tar.gz
@@ -130,102 +123,80 @@ jobs:
         DIR: src/code.cloudfoundry.org/bosh-dns-adapter
       run: |
         export DIR=$DIR
-        docker pull cloudfoundry/tas-runtime-build
-        docker run --rm --cap-add=SYS_ADMIN --privileged \
-        -v "${{ github.workspace }}:/workspace" \
-        -w /workspace \
-        -e MAPPING="$MAPPING" -e DIR="$DIR" -e FLAGS="$FLAGS" -e RUN_AS="$RUN_AS" -e VERIFICATIONS="$VERIFICATIONS" -e FUNCTIONS="$FUNCTIONS" \
-        cloudfoundry/tas-runtime-build \
-        bash ./ci/shared/tasks/run-bin-test/task.bash
+        ./repo/.github/helpers/test.bash ${{ github.workspace }} "$BUILD_IMAGE"
     - name: cf-pusher
       env:
         DIR: src/code.cloudfoundry.org/cf-pusher
       run: |
         export DIR=$DIR
-        docker pull cloudfoundry/tas-runtime-build
-        docker run --rm --cap-add=SYS_ADMIN --privileged \
-        -v "${{ github.workspace }}:/workspace" \
-        -w /workspace \
-        -e MAPPING="$MAPPING" -e DIR="$DIR" -e RUN_AS="$RUN_AS" -e VERIFICATIONS="$VERIFICATIONS" -e FUNCTIONS="$FUNCTIONS" \
-        cloudfoundry/tas-runtime-build \
-        bash ./ci/shared/tasks/run-bin-test/task.bash --keep-going --trace -r --fail-on-pending --randomize-all --nodes=7 --race --timeout 30m --flake-attempts 2
+        ./repo/.github/helpers/test.bash ${{ github.workspace }} "$BUILD_IMAGE"
     - name: garden-external-networker
       env:
         DIR: src/code.cloudfoundry.org/garden-external-networker
       run: |
         export DIR=$DIR
-        docker pull cloudfoundry/tas-runtime-build
-        docker run --rm --cap-add=SYS_ADMIN --privileged \
-        -v "${{ github.workspace }}:/workspace" \
-        -w /workspace \
-        -e MAPPING="$MAPPING" -e DIR="$DIR" -e RUN_AS="$RUN_AS" -e VERIFICATIONS="$VERIFICATIONS" -e FUNCTIONS="$FUNCTIONS" \
-        cloudfoundry/tas-runtime-build \
-        bash ./ci/shared/tasks/run-bin-test/task.bash --keep-going --trace -r --fail-on-pending --randomize-all --nodes=7 --race --timeout 30m --flake-attempts 2
+        ./repo/.github/helpers/test.bash ${{ github.workspace }} "$BUILD_IMAGE"
     - name: lib
       env:
         DIR: src/code.cloudfoundry.org/lib
       run: |
         export DIR=$DIR
-        docker pull cloudfoundry/tas-runtime-build
-        docker run --rm --cap-add=SYS_ADMIN --privileged \
-        -v "${{ github.workspace }}:/workspace" \
-        -w /workspace \
-        -e MAPPING="$MAPPING" -e DIR="$DIR" -e RUN_AS="$RUN_AS" -e VERIFICATIONS="$VERIFICATIONS" -e FUNCTIONS="$FUNCTIONS" \
-        cloudfoundry/tas-runtime-build \
-        bash ./ci/shared/tasks/run-bin-test/task.bash --keep-going --trace -r --fail-on-pending --randomize-all --nodes=7 --race --timeout 30m --flake-attempts 2
+        ./repo/.github/helpers/test.bash ${{ github.workspace }} "$BUILD_IMAGE"
     - name: service-discovery-controller
       env:
         DIR: src/code.cloudfoundry.org/service-discovery-controller
       run: |
         export DIR=$DIR
-        docker pull cloudfoundry/tas-runtime-build
-        docker run --rm --cap-add=SYS_ADMIN --privileged \
-        -v "${{ github.workspace }}:/workspace" \
-        -w /workspace \
-        -e MAPPING="$MAPPING" -e DIR="$DIR" -e RUN_AS="$RUN_AS" -e VERIFICATIONS="$VERIFICATIONS" -e FUNCTIONS="$FUNCTIONS" \
-        cloudfoundry/tas-runtime-build \
-        bash ./ci/shared/tasks/run-bin-test/task.bash --keep-going --trace -r --fail-on-pending --randomize-all --nodes=7 --race --timeout 30m --flake-attempts 2
-  # test-on-postgres:
-  #   runs-on: ubuntu-latest
-  #   needs: repo-clone
-  #   container:
-  #     image: us-central1-docker.pkg.dev/cf-diego-pivotal/tas-runtime-dockerhub-mirror/cloudfoundry/tas-runtime-postgres
-  #     credentials:
-  #       username: _json_key
-  #       password: ${{ secrets.GCP_SERVICE_ACCOUNT_TAS_RUNTIME_BUILD_IMAGE_READER }}
-  #   steps:
-  #   - name: Download artifact
-  #     uses: actions/download-artifact@v4
-  #     with:
-  #       name: repo
-  #   - run: |
-  #       tar -xzvf repo-artifact.tar.gz
-  #       tar -xzvf ci-artifact.tar.gz
-  #   - name: policy-server-mysql
-  #     env:
-  #       DIR: src/code.cloudfoundry.org/policy-server
-  #       DB: postgres
-  #     run: |
-  #       "${GITHUB_WORKSPACE}"/ci/shared/tasks/run-bin-test/task.bash --keep-going --trace -r --fail-on-pending --randomize-all --nodes=7 --race --timeout 30m --flake-attempts 2
-  # test-on-mysql-8-0:
-  #   runs-on: ubuntu-latest
-  #   needs: repo-clone
-  #   container:
-  #     image: us-central1-docker.pkg.dev/cf-diego-pivotal/tas-runtime-dockerhub-mirror/cloudfoundry/tas-runtime-mysql-8.0
-  #     credentials:
-  #       username: _json_key
-  #       password: ${{ secrets.GCP_SERVICE_ACCOUNT_TAS_RUNTIME_BUILD_IMAGE_READER }}
-  #   steps:
-  #   - name: Download artifact
-  #     uses: actions/download-artifact@v4
-  #     with:
-  #       name: repo
-  #   - run: |
-  #       tar -xzvf repo-artifact.tar.gz
-  #       tar -xzvf ci-artifact.tar.gz
-  #   - name: policy-server-mysql
-  #     env:
-  #       DIR: src/code.cloudfoundry.org/policy-server
-  #       DB: mysql
-  #     run: |
-  #       "${GITHUB_WORKSPACE}"/ci/shared/tasks/run-bin-test/task.bash --keep-going --trace -r --fail-on-pending --randomize-all --nodes=7 --race --timeout 30m --flake-attempts 2
+        ./repo/.github/helpers/test.bash ${{ github.workspace }} "$BUILD_IMAGE"
+  test-on-postgres:
+    runs-on: ubuntu-latest
+    needs: repo-clone
+    env:
+      BUILD_IMAGE: us-central1-docker.pkg.dev/cf-diego-pivotal/tas-runtime-dockerhub-mirror/cloudfoundry/tas-runtime-postgres
+    steps:
+    - name: Download artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: repo
+    - name: Authenticate with GCP
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_TAS_RUNTIME_BUILD_IMAGE_READER }}
+    - name: Configure Docker to use gcloud
+      run: "gcloud auth configure-docker us-central1-docker.pkg.dev\ndocker pull \"$BUILD_IMAGE\" \n"
+    - run: |
+        tar -xzvf repo-artifact.tar.gz
+        tar -xzvf ci-artifact.tar.gz
+    - name: policy-server-mysql
+      env:
+        DIR: src/code.cloudfoundry.org/policy-server
+        DB: postgres
+      run: |
+        ./repo/.github/helpers/test.bash ${{ github.workspace }} "$BUILD_IMAGE"
+  test-on-mysql-8-0:
+    runs-on: ubuntu-latest
+    needs: repo-clone
+    env:
+      BUILD_IMAGE: us-central1-docker.pkg.dev/cf-diego-pivotal/tas-runtime-dockerhub-mirror/cloudfoundry/tas-runtime-mysql-8.0
+    steps:
+    - name: Download artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: repo
+    - name: Authenticate with GCP
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_TAS_RUNTIME_BUILD_IMAGE_READER }}
+    - name: Configure Docker to use gcloud
+      run: |
+        gcloud auth configure-docker us-central1-docker.pkg.dev
+        docker pull "$BUILD_IMAGE"
+    - run: |
+        tar -xzvf repo-artifact.tar.gz
+        tar -xzvf ci-artifact.tar.gz
+    - name: policy-server-mysql
+      env:
+        DIR: src/code.cloudfoundry.org/policy-server
+        DB: mysql
+      run: |
+        ./repo/.github/helpers/test.bash ${{ github.workspace }} "$BUILD_IMAGE"
